@@ -1,34 +1,19 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import gsap from 'gsap'
 
 export default function ResumenPage() {
-  const [totalVentas, setTotalVentas] = useState(0)
   const [totalPedidos, setTotalPedidos] = useState(0)
+  const [totalVentas, setTotalVentas] = useState(0)
   const [cargando, setCargando] = useState(true)
-
-  const cargarTotales = async () => {
-    setCargando(true)
-    const hoy = new Date()
-    hoy.setHours(0, 0, 0, 0)
-
-    const { data, error } = await supabase
-      .from('pedidos')
-      .select('*')
-      .gte('created_at', hoy.toISOString())
-
-    if (!error && data) {
-      setTotalPedidos(data.length)
-      const suma = data.reduce((acc, p) => acc + (p.total || 0), 0)
-      setTotalVentas(suma)
-    }
-    setCargando(false)
-  }
+  const cardRef = useRef(null)
 
   useEffect(() => {
     let activo = true
 
-    async function obtenerDatos() {
+    async function cargarTotales() {
+      setCargando(true)
       const hoy = new Date()
       hoy.setHours(0, 0, 0, 0)
 
@@ -47,15 +32,26 @@ export default function ResumenPage() {
       }
     }
 
-    obtenerDatos()
+    cargarTotales()
 
     return () => {
       activo = false
     }
   }, [])
 
+  // Animación GSAP al cargar los datos
+  useEffect(() => {
+    if (!cargando && cardRef.current) {
+      gsap.fromTo(
+        cardRef.current,
+        { opacity: 0, y: 15 },
+        { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out' }
+      )
+    }
+  }, [cargando])
+
   const cerrarJornada = async () => {
-    const confirmar = confirm("¿Deseas archivar los pedidos y limpiar la pantalla de cocina para el nuevo turno?")
+    const confirmar = confirm('¿Deseas archivar todos los pedidos y limpiar la cocina para el nuevo turno?')
     if (!confirmar) return
 
     const { error } = await supabase
@@ -63,42 +59,68 @@ export default function ResumenPage() {
       .update({ estado: 'archivado' })
       .neq('estado', 'archivado')
 
-    if (error) {
-      alert("Error al cerrar la jornada: " + error.message)
+    if (!error) {
+      alert('Jornada cerrada correctamente. Los pedidos pasaron al historial.')
+      setTotalPedidos(0)
+      setTotalVentas(0)
     } else {
-      alert("¡Jornada cerrada con éxito! La cocina ha quedado limpia.")
-      cargarTotales()
+      alert('Error al cerrar la jornada')
     }
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6 max-w-md mx-auto font-sans">
-      <h1 className="text-2xl font-bold text-slate-800 text-center mb-6">📊 Cierre de Caja y Totales</h1>
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans p-4 md:p-6 flex flex-col justify-between">
+      <div>
+        {/* Header */}
+        <header className="flex justify-between items-center pb-6 border-b border-slate-800 mb-8">
+          <div className="flex items-center gap-3">
+            <div className="bg-amber-400 p-2 rounded-xl text-slate-950 font-black shadow-lg shadow-amber-500/20">
+              📊
+            </div>
+            <div>
+              <h1 className="text-2xl font-black tracking-tight text-white">
+                EL CORDÓN <span className="text-amber-400">| Resumen Diario</span>
+              </h1>
+              <p className="text-xs text-slate-400">Totales del día actual</p>
+            </div>
+          </div>
+        </header>
 
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm mb-6 space-y-4">
-        <div>
-          <p className="text-xs font-bold text-slate-400 uppercase">Total Pedidos de Hoy</p>
-          <p className="text-3xl font-black text-slate-800">{cargando ? "..." : totalPedidos}</p>
-        </div>
-        <div className="border-t border-slate-100 pt-3">
-          <p className="text-xs font-bold text-slate-400 uppercase">Monto Total Facturado</p>
-          <p className="text-3xl font-black text-emerald-600">${cargando ? "..." : totalVentas.toFixed(2)}</p>
-        </div>
+        {/* Tarjetas de Métricas */}
+        {cargando ? (
+          <div className="text-center py-20 text-slate-400 animate-pulse text-sm">
+            Calculando métricas del día...
+          </div>
+        ) : (
+          <div ref={cardRef} className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+            {/* Pedidos del día */}
+            <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl flex flex-col justify-between">
+              <div>
+                <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Total Comandas Hoy</span>
+                <h2 className="text-5xl font-black text-amber-400 mt-2">{totalPedidos}</h2>
+              </div>
+              <p className="text-slate-500 text-xs mt-4">Pedidos registrados desde las 00:00 hs</p>
+            </div>
+
+            {/* Total ventas */}
+            <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl flex flex-col justify-between">
+              <div>
+                <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Ventas Estimadas</span>
+                <h2 className="text-5xl font-black text-emerald-400 mt-2">${totalVentas.toFixed(2)}</h2>
+              </div>
+              <p className="text-slate-500 text-xs mt-4">Suma acumulada del turno de hoy</p>
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="space-y-3">
-        <button
-          onClick={cargarTotales}
-          className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold text-sm"
-        >
-          🔄 Actualizar Totales
-        </button>
-
+      {/* Botón de Cierre de Jornada */}
+      <div className="max-w-4xl mx-auto w-full mt-10">
         <button
           onClick={cerrarJornada}
-          className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-xl font-bold text-sm shadow-md"
+          className="w-full bg-red-600/20 hover:bg-red-600 border border-red-500/40 text-red-300 hover:text-white font-bold py-4 rounded-2xl transition-all shadow-lg text-sm uppercase tracking-wider"
         >
-          🧹 Cerrar Jornada y Limpiar Cocina
+          🧹 Cerrar Turno / Archivar Comandas
         </button>
       </div>
     </div>
