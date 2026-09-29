@@ -34,18 +34,21 @@ export default function CocinaPage() {
     }
   }
 
-  const obtenerPedidos = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('pedidos')
-      .select('*')
-      .order('created_at', { ascending: true })
+ // Cambia la función obtenerPedidos y el useEffect para usar .neq('estado', 'entregado')
+const obtenerPedidos = useCallback(async () => {
+  const { data, error } = await supabase
+    .from('pedidos')
+    .select('*')
+    .neq('estado', 'entregado')
+    .neq('estado', 'archivado')
+    .order('created_at', { ascending: true })
 
-    if (error) {
-      console.error('Error al obtener pedidos:', error)
-    } else {
-      setPedidos(data || [])
-    }
-  }, [])
+  if (error) {
+    console.error('Error al obtener pedidos:', error)
+  } else {
+    setPedidos(data || [])
+  }
+}, [])
 
   useEffect(() => {
     let active = true
